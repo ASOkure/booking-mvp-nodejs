@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New business — Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  .admin-wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+  .admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .admin-header h1 {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    margin: 0;
+  }
+  .card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .card h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    margin: 0 0 16px;
+  }
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  label.field-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--slate);
+  }
+  .service-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 2fr auto;
+    gap: 8px;
+    align-items: end;
+    margin-bottom: 10px;
+  }
+  .service-row .field-label { margin-bottom: 4px; }
+  .btn-remove {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: #A33A3A;
+    border-radius: 8px;
+    padding: 12px 10px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .btn-add {
+    background: transparent;
+    border: 1px dashed var(--line);
+    color: var(--ink);
+    border-radius: var(--radius);
+    padding: 10px;
+    width: 100%;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .btn-add:hover { border-color: var(--clay); }
+  .checkbox-days {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .checkbox-days label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+  }
+  .result-box {
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    margin-top: 20px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .result-success { background: #E5F1EA; color: var(--forest); }
+  .result-error { background: #F1E3E3; color: #A33A3A; }
+</style>
+</head>
+<body>
+<div class="admin-wrap">
+  <div class="admin-header">
+    <h1>Create a business</h1>
+    <a href="/" class="muted small">Back to booking page</a>
+  </div>
+
+  <div class="card">
+    <h2>Platform key</h2>
+    <label class="field-label">X-Platform-Key</label>
+    <input type="password" id="platformKey" class="text-input" placeholder="Your PLATFORM_ADMIN_KEY" style="margin-bottom:0;">
+  </div>
+
+  <div class="card">
+    <h2>Business details</h2>
+    <label class="field-label">Slug (used in the booking URL, e.g. aster-co)</label>
+    <input type="text" id="slug" class="text-input" placeholder="aster-co">
+    <label class="field-label">Business name</label>
+    <input type="text" id="name" class="text-input" placeholder="Aster & Co.">
+    <label class="field-label">Tagline</label>
+    <input type="text" id="tagline" class="text-input" placeholder="Local, reliable, booked in minutes.">
+    <label class="field-label">About</label>
+    <textarea id="about" class="text-input" rows="3" placeholder="A short description shown on the booking page."></textarea>
+
+    <div class="field-row">
+      <div>
+        <label class="field-label">Opens at</label>
+        <input type="time" id="startTime" class="text-input" value="08:00">
+      </div>
+      <div>
+        <label class="field-label">Closes at</label>
+        <input type="time" id="endTime" class="text-input" value="17:00">
+      </div>
+    </div>
+    <div class="field-row">
+      <div>
+        <label class="field-label">Slot length (minutes)</label>
+        <input type="number" id="slotMinutes" class="text-input" value="60" min="5" step="5">
+      </div>
+      <div>
+        <label class="field-label">Cancellation fee (£, 0 disables)</label>
+        <input type="number" id="cancellationFee" class="text-input" value="0" min="0">
+      </div>
+    </div>
+    <label class="field-label">Closed days</label>
+    <div class="checkbox-days" id="closedDays">
+      <label><input type="checkbox" value="0" checked> Sun</label>
+      <label><input type="checkbox" value="1"> Mon</label>
+      <label><input type="checkbox" value="2"> Tue</label>
+      <label><input type="checkbox" value="3"> Wed</label>
+      <label><input type="checkbox" value="4"> Thu</label>
+      <label><input type="checkbox" value="5"> Fri</label>
+      <label><input type="checkbox" value="6"> Sat</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Admin login</h2>
+    <label class="field-label">Admin email</label>
+    <input type="email" id="adminEmail" class="text-input" placeholder="you@yourdomain.com">
+    <label class="field-label">Admin password</label>
+    <input type="password" id="adminPassword" class="text-input" placeholder="A real password" style="margin-bottom:0;">
+  </div>
+
+  <div class="card">
+    <h2>Services</h2>
+    <div id="servicesList"></div>
+    <button type="button" class="btn-add" id="addService">+ Add another service</button>
+  </div>
+
+  <button class="btn-primary" id="submitButton">Create business</button>
+  <div id="result"></div>
+</div>
+
+<script>
+  const servicesList = document.getElementById('servicesList');
+  const resultEl = document.getElementById('result');
+
+  function addServiceRow(values) {
+    const row = document.createElement('div');
+    row.className = 'service-row';
+    row.innerHTML = `
+      <div>
+        <label class="field-label">Name</label>
+        <input type="text" class="text-input svc-name" style="margin-bottom:0;" placeholder="Standard Clean" value="${values?.name || ''}">
+      </div>
+      <div>
+        <label class="field-label">Minutes</label>
+        <input type="number" class="text-input svc-duration" style="margin-bottom:0;" value="${values?.durationMinutes || 60}" min="5" step="5">
+      </div>
+      <div>
+        <label class="field-label">Price £</label>
+        <input type="number" class="text-input svc-price" style="margin-bottom:0;" value="${values?.priceGBP || 0}" min="0">
+      </div>
+      <div>
+        <label class="field-label">Description</label>
+        <input type="text" class="text-input svc-description" style="margin-bottom:0;" placeholder="Optional" value="${values?.description || ''}">
+      </div>
+      <button type="button" class="btn-remove">Remove</button>
+    `;
+    row.querySelector('.btn-remove').addEventListener('click', () => row.remove());
+    servicesList.appendChild(row);
+  }
+
+  document.getElementById('addService').addEventListener('click', () => addServiceRow());
+  addServiceRow({ name: 'Standard Clean', durationMinutes: 60, priceGBP: 35, description: '' });
+
+  function collectServices() {
+    return Array.from(servicesList.querySelectorAll('.service-row')).map(row => ({
+      name: row.querySelector('.svc-name').value.trim(),
+      durationMinutes: Number(row.querySelector('.svc-duration').value),
+      priceGBP: Number(row.querySelector('.svc-price').value),
+      description: row.querySelector('.svc-description').value.trim(),
+    })).filter(s => s.name);
+  }
+
+  document.getElementById('submitButton').addEventListener('click', async () => {
+    resultEl.innerHTML = '';
+    const platformKey = document.getElementById('platformKey').value.trim();
+    const slug = document.getElementById('slug').value.trim();
+    const name = document.getElementById('name').value.trim();
+    const adminEmail = document.getElementById('adminEmail').value.trim();
+    const adminPassword = document.getElementById('adminPassword').value;
+
+    if (!platformKey || !slug || !name || !adminEmail || !adminPassword) {
+      resultEl.innerHTML = '<div class="result-box result-error">Platform key, slug, name, admin email, and admin password are all required.</div>';
+      return;
+    }
+
+    const closedDays = Array.from(document.querySelectorAll('#closedDays input:checked')).map(cb => Number(cb.value));
+
+    const payload = {
+      slug, name,
+      tagline: document.getElementById('tagline').value.trim(),
+      about: document.getElementById('about').value.trim(),
+      workingHours: {
+        start: document.getElementById('startTime').value,
+        end: document.getElementById('endTime').value,
+      },
+      slotMinutes: Number(document.getElementById('slotMinutes').value),
+      closedDays,
+      cancellationFeeGBP: Number(document.getElementById('cancellationFee').value),
+      adminEmail,
+      adminPassword,
+      services: collectServices(),
+    };
+
+    const submitButton = document.getElementById('submitButton');
+    submitButton.disabled = true;
+    submitButton.textContent = 'Creating…';
+
+    try {
+      const res = await fetch('/api/platform/businesses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Platform-Key': platformKey },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        resultEl.innerHTML = `<div class="result-box result-error">${data.error || 'Something went wrong.'}</div>`;
+        return;
+      }
+      resultEl.innerHTML = `
+        <div class="result-box result-success">
+          Created <strong>${data.business.name}</strong>. Booking page: <a href="/${data.business.slug}">/${data.business.slug}</a><br>
+          Log in at <a href="/admin.html">/admin.html</a> with ${adminEmail}.
+        </div>
+      `;
+    } catch (err) {
+      resultEl.innerHTML = '<div class="result-box result-error">Network error. Is the server running?</div>';
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = 'Create business';
+    }
+  });
+</script>
+</body>
+</html>
