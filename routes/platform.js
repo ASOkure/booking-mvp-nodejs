@@ -17,20 +17,20 @@ router.post('/businesses', async (req, res) => {
   if (!slug || !name || !workingHours || !slotMinutes || !adminEmail || !adminPassword) {
     return res.status(400).json({ error: 'slug, name, workingHours, slotMinutes, adminEmail, adminPassword are required' });
   }
-  if (businesses.getBySlug(slug)) {
+  if (await businesses.getBySlug(slug)) {
     return res.status(409).json({ error: 'Slug already in use' });
   }
-  if (businesses.findByAdminEmail(adminEmail)) {
+  if (await businesses.findByAdminEmail(adminEmail)) {
     return res.status(409).json({ error: 'Admin email already in use' });
   }
 
-  const business = businesses.create({
+  const business = await businesses.create({
     slug, name, tagline, about, timezone,
     workingHours, slotMinutes, closedDays, cancellationFeeGBP,
     adminEmail, adminPasswordHash: await hashPassword(adminPassword),
   });
 
-  const created = (serviceList || []).map(s => services.create(business.id, s));
+  const created = await Promise.all((serviceList || []).map(s => services.create(business.id, s)));
 
   res.status(201).json({ business: { id: business.id, slug: business.slug, name: business.name }, services: created });
 });

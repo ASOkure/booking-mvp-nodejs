@@ -4,11 +4,11 @@
   "description": "",
   "main": "index.js",
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=18"
   },
   "scripts": {
-    "start": "node --experimental-sqlite server.js",
-    "migrate-legacy-data": "node --experimental-sqlite migrate-legacy-data.js"
+    "start": "node server.js",
+    "migrate-legacy-data": "node migrate-legacy-data.js"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +19,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.0",
     "stripe": "^22.6.0"
   }
 }

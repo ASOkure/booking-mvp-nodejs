@@ -4,6 +4,7 @@ const path = require('path');
 const Stripe = require('stripe');
 require('dotenv').config({ quiet: true });
 
+const { initSchema } = require('./db');
 const bookings = require('./repositories/bookings');
 const services = require('./repositories/services');
 const publicRouter = require('./routes/public');
@@ -29,7 +30,7 @@ app.get('/', (req, res) => {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Stripe webhook needs the raw body, so it must be registered before express.json()
-app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripe || !STRIPE_WEBHOOK_SECRET) return res.status(200).send('Stripe not configured');
   let event;
   try {
@@ -39,7 +40,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res) =
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
   if (event.type === 'checkout.session.completed') {
-    bookings.confirmByStripeSessionId(event.data.object.id);
+    await bookings.confirmByStripeSessionId(event.data.object.id);
   }
   res.json({ received: true });
 });
@@ -50,10 +51,10 @@ app.use('/api/business/:slug', publicRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/platform', platformRouter);
 
-app.get('/api/bookings/:id', (req, res) => {
-  const booking = bookings.findById(Number(req.params.id));
+app.get('/api/bookings/:id', async (req, res) => {
+  const booking = await bookings.findById(Number(req.params.id));
   if (!booking) return res.status(404).json({ error: 'Not found' });
-  const service = services.getById(booking.serviceId);
+  const service = await services.getById(booking.serviceId);
   res.json({ ...booking, serviceName: service ? service.name : null });
 });
 
@@ -63,6 +64,13 @@ app.get('/:slug', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Booking MVP running at http://localhost:${PORT}`);
-});
+initSchema()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Booking MVP running at http://localhost:${PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error('Failed to initialize database schema:', err);
+    process.exit(1);
+  });

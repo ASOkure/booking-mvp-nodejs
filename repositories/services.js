@@ -1,4 +1,4 @@
-const db = require('../db');
+const { pool } = require('../db');
 
 function rowToService(row) {
   if (!row) return null;
@@ -12,26 +12,28 @@ function rowToService(row) {
   };
 }
 
-function listForBusiness(businessId) {
-  return db.prepare('SELECT * FROM services WHERE business_id = ? ORDER BY id').all(businessId).map(rowToService);
+async function listForBusiness(businessId) {
+  const { rows } = await pool.query('SELECT * FROM services WHERE business_id = $1 ORDER BY id', [businessId]);
+  return rows.map(rowToService);
 }
 
-function getByIdForBusiness(id, businessId) {
-  const row = db.prepare('SELECT * FROM services WHERE id = ? AND business_id = ?').get(id, businessId);
-  return rowToService(row);
+async function getByIdForBusiness(id, businessId) {
+  const { rows } = await pool.query('SELECT * FROM services WHERE id = $1 AND business_id = $2', [id, businessId]);
+  return rowToService(rows[0]);
 }
 
-function getById(id) {
-  const row = db.prepare('SELECT * FROM services WHERE id = ?').get(id);
-  return rowToService(row);
+async function getById(id) {
+  const { rows } = await pool.query('SELECT * FROM services WHERE id = $1', [id]);
+  return rowToService(rows[0]);
 }
 
-function create(businessId, { name, durationMinutes, priceGBP, description }) {
-  const info = db.prepare(`
+async function create(businessId, { name, durationMinutes, priceGBP, description }) {
+  const { rows } = await pool.query(`
     INSERT INTO services (business_id, name, duration_minutes, price_gbp, description)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(businessId, name, durationMinutes, priceGBP, description || '');
-  return getByIdForBusiness(info.lastInsertRowid, businessId);
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id
+  `, [businessId, name, durationMinutes, priceGBP, description || '']);
+  return getByIdForBusiness(rows[0].id, businessId);
 }
 
 module.exports = { listForBusiness, getByIdForBusiness, getById, create };

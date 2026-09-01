@@ -1,62 +1,68 @@
-const path = require('path');
-const fs = require('fs');
-const { DatabaseSync } = require('node:sqlite');
+const { Pool } = require('pg');
 
-const DATA_DIR = path.join(__dirname, 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL must be set (see .env.example)');
+}
 
-const db = new DatabaseSync(path.join(DATA_DIR, 'booking.db'));
-db.exec('PRAGMA journal_mode = WAL');
-db.exec('PRAGMA foreign_keys = ON');
+// Render's managed Postgres requires SSL; a local dev/test instance
+// (e.g. via Docker) typically doesn't have a cert to verify.
+const useSSL = !/localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS businesses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    slug TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    tagline TEXT NOT NULL DEFAULT '',
-    about TEXT NOT NULL DEFAULT '',
-    timezone TEXT NOT NULL DEFAULT 'Europe/London',
-    working_hours_start TEXT NOT NULL DEFAULT '08:00',
-    working_hours_end TEXT NOT NULL DEFAULT '17:00',
-    slot_minutes INTEGER NOT NULL DEFAULT 60,
-    closed_days TEXT NOT NULL DEFAULT '[0]',
-    cancellation_fee_gbp INTEGER NOT NULL DEFAULT 0,
-    admin_email TEXT NOT NULL UNIQUE,
-    admin_password_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: useSSL ? { rejectUnauthorized: false } : false,
+});
 
-  CREATE TABLE IF NOT EXISTS services (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    business_id INTEGER NOT NULL REFERENCES businesses(id),
-    name TEXT NOT NULL,
-    duration_minutes INTEGER NOT NULL,
-    price_gbp INTEGER NOT NULL,
-    description TEXT NOT NULL DEFAULT ''
-  );
+async function initSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS businesses (
+      id SERIAL PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      tagline TEXT NOT NULL DEFAULT '',
+      about TEXT NOT NULL DEFAULT '',
+      timezone TEXT NOT NULL DEFAULT 'Europe/London',
+      working_hours_start TEXT NOT NULL DEFAULT '08:00',
+      working_hours_end TEXT NOT NULL DEFAULT '17:00',
+      slot_minutes INTEGER NOT NULL DEFAULT 60,
+      closed_days TEXT NOT NULL DEFAULT '[0]',
+      cancellation_fee_gbp INTEGER NOT NULL DEFAULT 0,
+      admin_email TEXT NOT NULL UNIQUE,
+      admin_password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
 
-  CREATE TABLE IF NOT EXISTS bookings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    business_id INTEGER NOT NULL REFERENCES businesses(id),
-    service_id INTEGER NOT NULL REFERENCES services(id),
-    date TEXT NOT NULL,
-    time TEXT NOT NULL,
-    customer_name TEXT NOT NULL,
-    customer_email TEXT NOT NULL,
-    customer_phone TEXT NOT NULL DEFAULT '',
-    notes TEXT NOT NULL DEFAULT '',
-    amount_gbp INTEGER NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    stripe_session_id TEXT,
-    cancellation_fee_gbp INTEGER,
-    cancelled_at TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
+    CREATE TABLE IF NOT EXISTS services (
+      id SERIAL PRIMARY KEY,
+      business_id INTEGER NOT NULL REFERENCES businesses(id),
+      name TEXT NOT NULL,
+      duration_minutes INTEGER NOT NULL,
+      price_gbp INTEGER NOT NULL,
+      description TEXT NOT NULL DEFAULT ''
+    );
 
-  CREATE UNIQUE INDEX IF NOT EXISTS ux_bookings_biz_slot
-    ON bookings(business_id, date, time)
-    WHERE status <> 'cancelled';
-`);
+    CREATE TABLE IF NOT EXISTS bookings (
+      id SERIAL PRIMARY KEY,
+      business_id INTEGER NOT NULL REFERENCES businesses(id),
+      service_id INTEGER NOT NULL REFERENCES services(id),
+      date TEXT NOT NULL,
+      time TEXT NOT NULL,
+      customer_name TEXT NOT NULL,
+      customer_email TEXT NOT NULL,
+      customer_phone TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      amount_gbp INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      stripe_session_id TEXT,
+      cancellation_fee_gbp INTEGER,
+      cancelled_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
 
-module.exports = db;
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_bookings_biz_slot
+      ON bookings(business_id, date, time)
+      WHERE status <> 'cancelled';
+  `);
+}
+
+module.exports = { pool, initSchema };

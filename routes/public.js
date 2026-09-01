@@ -10,8 +10,8 @@ const stripe = STRIPE_SECRET_KEY ? Stripe(STRIPE_SECRET_KEY) : null;
 
 const router = express.Router({ mergeParams: true });
 
-router.use((req, res, next) => {
-  const business = businesses.getBySlug(req.params.slug);
+router.use(async (req, res, next) => {
+  const business = await businesses.getBySlug(req.params.slug);
   if (!business) return res.status(404).json({ error: 'Unknown business' });
   req.business = business;
   next();
@@ -32,7 +32,7 @@ function generateDaySlots(business) {
   return slots;
 }
 
-router.get('/config', (req, res) => {
+router.get('/config', async (req, res) => {
   const { business } = req;
   res.json({
     name: business.name,
@@ -43,11 +43,11 @@ router.get('/config', (req, res) => {
     slotMinutes: business.slotMinutes,
     closedDays: business.closedDays,
     cancellationFeeGBP: business.cancellationFeeGBP,
-    services: services.listForBusiness(business.id),
+    services: await services.listForBusiness(business.id),
   });
 });
 
-router.get('/availability', (req, res) => {
+router.get('/availability', async (req, res) => {
   const { business } = req;
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'date query param required (YYYY-MM-DD)' });
@@ -58,20 +58,20 @@ router.get('/availability', (req, res) => {
   }
 
   const allSlots = generateDaySlots(business);
-  const taken = bookings.takenTimesForDate(business.id, date);
+  const taken = await bookings.takenTimesForDate(business.id, date);
   res.json({ date, slots: allSlots.filter(s => !taken.includes(s)) });
 });
 
 router.post('/bookings', async (req, res) => {
   const { business } = req;
   const { serviceId, date, time, name, email, phone, notes } = req.body;
-  const service = services.getByIdForBusiness(Number(serviceId), business.id);
+  const service = await services.getByIdForBusiness(Number(serviceId), business.id);
   if (!service) return res.status(400).json({ error: 'Unknown service' });
   if (!date || !time || !name || !email) return res.status(400).json({ error: 'Missing required fields' });
 
   let booking;
   try {
-    booking = bookings.create({
+    booking = await bookings.create({
       businessId: business.id,
       serviceId: service.id,
       date, time,
@@ -89,7 +89,7 @@ router.post('/bookings', async (req, res) => {
   }
 
   if (!stripe) {
-    bookings.setStatus(booking.id, 'confirmed');
+    await bookings.setStatus(booking.id, 'confirmed');
     return res.json({ demoMode: true, bookingId: booking.id });
   }
 
@@ -110,7 +110,7 @@ router.post('/bookings', async (req, res) => {
       cancel_url: `${PUBLIC_URL}/${business.slug}?cancelled=1`,
       metadata: { bookingId: String(booking.id) },
     });
-    bookings.setStripeSessionId(booking.id, session.id);
+    await bookings.setStripeSessionId(booking.id, session.id);
     res.json({ checkoutUrl: session.url, bookingId: booking.id });
   } catch (err) {
     console.error(err);

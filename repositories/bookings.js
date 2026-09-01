@@ -1,6 +1,7 @@
-const db = require('../db');
+const { pool } = require('../db');
 
 class SlotTakenError extends Error {}
+class AlreadyCancelledError extends Error {}
 
 function rowToBooking(row) {
   if (!row) return null;
@@ -23,69 +24,73 @@ function rowToBooking(row) {
   };
 }
 
-function takenTimesForDate(businessId, date) {
-  return db.prepare(`
-    SELECT time FROM bookings WHERE business_id = ? AND date = ? AND status <> 'cancelled'
-  `).all(businessId, date).map(r => r.time);
+async function takenTimesForDate(businessId, date) {
+  const { rows } = await pool.query(`
+    SELECT time FROM bookings WHERE business_id = $1 AND date = $2 AND status <> 'cancelled'
+  `, [businessId, date]);
+  return rows.map(r => r.time);
 }
 
-function create({ businessId, serviceId, date, time, customerName, customerEmail, customerPhone, notes, amountGBP }) {
+async function create({ businessId, serviceId, date, time, customerName, customerEmail, customerPhone, notes, amountGBP }) {
   try {
-    const info = db.prepare(`
+    const { rows } = await pool.query(`
       INSERT INTO bookings (business_id, service_id, date, time, customer_name, customer_email, customer_phone, notes, amount_gbp, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-    `).run(businessId, serviceId, date, time, customerName, customerEmail, customerPhone || '', notes || '', amountGBP);
-    return findById(info.lastInsertRowid);
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
+      RETURNING id
+    `, [businessId, serviceId, date, time, customerName, customerEmail, customerPhone || '', notes || '', amountGBP]);
+    return findById(rows[0].id);
   } catch (err) {
-    if (err.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(err.message)) {
+    if (err.code === '23505') { // Postgres unique_violation
       throw new SlotTakenError('That slot was just taken. Please pick another.');
     }
     throw err;
   }
 }
 
-function findById(id) {
-  return rowToBooking(db.prepare('SELECT * FROM bookings WHERE id = ?').get(id));
+async function findById(id) {
+  const { rows } = await pool.query('SELECT * FROM bookings WHERE id = $1', [id]);
+  return rowToBooking(rows[0]);
 }
 
-function findByStripeSessionId(sessionId) {
-  return rowToBooking(db.prepare('SELECT * FROM bookings WHERE stripe_session_id = ?').get(sessionId));
+async function findByIdForBusiness(id, businessId) {
+  const { rows } = await pool.query('SELECT * FROM bookings WHERE id = $1 AND business_id = $2', [id, businessId]);
+  return rowToBooking(rows[0]);
 }
 
-function setStripeSessionId(id, sessionId) {
-  db.prepare('UPDATE bookings SET stripe_session_id = ? WHERE id = ?').run(sessionId, id);
+async function findByStripeSessionId(sessionId) {
+  const { rows } = await pool.query('SELECT * FROM bookings WHERE stripe_session_id = $1', [sessionId]);
+  return rowToBooking(rows[0]);
 }
 
-function setStatus(id, status) {
-  db.prepare('UPDATE bookings SET status = ? WHERE id = ?').run(status, id);
+async function setStripeSessionId(id, sessionId) {
+  await pool.query('UPDATE bookings SET stripe_session_id = $1 WHERE id = $2', [sessionId, id]);
 }
 
-function confirmByStripeSessionId(sessionId) {
-  db.prepare(`UPDATE bookings SET status = 'confirmed' WHERE stripe_session_id = ?`).run(sessionId);
+async function setStatus(id, status) {
+  await pool.query('UPDATE bookings SET status = $1 WHERE id = $2', [status, id]);
 }
 
-function listForBusiness(businessId) {
-  return db.prepare(`
-    SELECT * FROM bookings WHERE business_id = ? ORDER BY date DESC, time DESC
-  `).all(businessId).map(rowToBooking);
+async function confirmByStripeSessionId(sessionId) {
+  await pool.query(`UPDATE bookings SET status = 'confirmed' WHERE stripe_session_id = $1`, [sessionId]);
 }
 
-function findByIdForBusiness(id, businessId) {
-  return rowToBooking(db.prepare('SELECT * FROM bookings WHERE id = ? AND business_id = ?').get(id, businessId));
+async function listForBusiness(businessId) {
+  const { rows } = await pool.query(`
+    SELECT * FROM bookings WHERE business_id = $1 ORDER BY date DESC, time DESC
+  `, [businessId]);
+  return rows.map(rowToBooking);
 }
 
-class AlreadyCancelledError extends Error {}
-
-function cancel(id, businessId, cancellationFeeGBP) {
-  const existing = findByIdForBusiness(id, businessId);
+async function cancel(id, businessId, cancellationFeeGBP) {
+  const existing = await findByIdForBusiness(id, businessId);
   if (!existing) return null;
   if (existing.status === 'cancelled') throw new AlreadyCancelledError('Booking is already cancelled');
 
-  db.prepare(`
+  await pool.query(`
     UPDATE bookings
-    SET status = 'cancelled', cancellation_fee_gbp = ?, cancelled_at = datetime('now')
-    WHERE id = ?
-  `).run(cancellationFeeGBP, id);
+    SET status = 'cancelled', cancellation_fee_gbp = $1, cancelled_at = now()
+    WHERE id = $2
+  `, [cancellationFeeGBP, id]);
   return findById(id);
 }
 

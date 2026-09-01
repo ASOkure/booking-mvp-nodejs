@@ -1,4 +1,4 @@
-const db = require('../db');
+const { pool } = require('../db');
 
 function rowToBusiness(row) {
   if (!row) return null;
@@ -19,31 +19,32 @@ function rowToBusiness(row) {
   };
 }
 
-function getBySlug(slug) {
-  const row = db.prepare('SELECT * FROM businesses WHERE slug = ?').get(slug);
-  return rowToBusiness(row);
+async function getBySlug(slug) {
+  const { rows } = await pool.query('SELECT * FROM businesses WHERE slug = $1', [slug]);
+  return rowToBusiness(rows[0]);
 }
 
-function getById(id) {
-  const row = db.prepare('SELECT * FROM businesses WHERE id = ?').get(id);
-  return rowToBusiness(row);
+async function getById(id) {
+  const { rows } = await pool.query('SELECT * FROM businesses WHERE id = $1', [id]);
+  return rowToBusiness(rows[0]);
 }
 
-function findByAdminEmail(email) {
-  const row = db.prepare('SELECT * FROM businesses WHERE admin_email = ?').get(email);
-  return rowToBusiness(row);
+async function findByAdminEmail(email) {
+  const { rows } = await pool.query('SELECT * FROM businesses WHERE admin_email = $1', [email]);
+  return rowToBusiness(rows[0]);
 }
 
-function create({ slug, name, tagline, about, timezone, workingHours, slotMinutes, closedDays, cancellationFeeGBP, adminEmail, adminPasswordHash }) {
-  const info = db.prepare(`
+async function create({ slug, name, tagline, about, timezone, workingHours, slotMinutes, closedDays, cancellationFeeGBP, adminEmail, adminPasswordHash }) {
+  const { rows } = await pool.query(`
     INSERT INTO businesses (slug, name, tagline, about, timezone, working_hours_start, working_hours_end, slot_minutes, closed_days, cancellation_fee_gbp, admin_email, admin_password_hash)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    RETURNING id
+  `, [
     slug, name, tagline || '', about || '', timezone || 'Europe/London',
     workingHours.start, workingHours.end, slotMinutes, JSON.stringify(closedDays || [0]),
-    cancellationFeeGBP || 0, adminEmail, adminPasswordHash
-  );
-  return getById(info.lastInsertRowid);
+    cancellationFeeGBP || 0, adminEmail, adminPasswordHash,
+  ]);
+  return getById(rows[0].id);
 }
 
 module.exports = { getBySlug, getById, findByAdminEmail, create };

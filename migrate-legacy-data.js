@@ -1,12 +1,13 @@
 // One-off script: migrates the previous single-tenant BUSINESS config and
-// data.json bookings into the new multi-tenant SQLite schema. Not web-exposed.
+// data.json bookings into the multi-tenant Postgres schema. Not web-exposed.
 //
 // Usage:
-//   npm run migrate-legacy-data -- --email owner@example.com --password 'a-real-password' [--slug aster-co]
+//   node migrate-legacy-data.js --email owner@example.com --password 'a-real-password' [--slug aster-co]
 
 require('dotenv').config({ quiet: true });
 const fs = require('fs');
 const path = require('path');
+const { initSchema } = require('./db');
 const businesses = require('./repositories/businesses');
 const services = require('./repositories/services');
 const bookings = require('./repositories/bookings');
@@ -38,15 +39,17 @@ async function main() {
     process.exit(1);
   }
 
+  await initSchema();
+
   const name = process.env.BUSINESS_NAME || 'Aster & Co.';
   const slug = args.slug || slugify(name);
 
-  if (businesses.getBySlug(slug)) {
+  if (await businesses.getBySlug(slug)) {
     console.error(`Business with slug "${slug}" already exists. Nothing to do.`);
     process.exit(1);
   }
 
-  const business = businesses.create({
+  const business = await businesses.create({
     slug,
     name,
     tagline: process.env.BUSINESS_TAGLINE || 'Local, reliable, booked in minutes.',
@@ -63,7 +66,7 @@ async function main() {
 
   const serviceIdMap = {};
   for (const s of LEGACY_SERVICES) {
-    const created = services.create(business.id, s);
+    const created = await services.create(business.id, s);
     serviceIdMap[s.legacyId] = created.id;
     console.log(`  Service: ${created.name} -> id ${created.id}`);
   }
@@ -81,7 +84,7 @@ async function main() {
         continue;
       }
       try {
-        const created = bookings.create({
+        const created = await bookings.create({
           businessId: business.id,
           serviceId,
           date: b.date,
@@ -92,7 +95,7 @@ async function main() {
           notes: b.notes,
           amountGBP: b.amount_gbp,
         });
-        bookings.setStatus(created.id, b.status);
+        await bookings.setStatus(created.id, b.status);
         imported++;
       } catch (err) {
         console.warn(`  Skipping booking ${b.id} (${b.date} ${b.time}): ${err.message}`);
@@ -104,6 +107,10 @@ async function main() {
   console.log(`\nImported ${imported} booking(s), skipped ${skipped}.`);
   console.log(`\nSet this in your environment so "/" keeps working:\n  DEFAULT_BUSINESS_SLUG=${slug}`);
   console.log(`\nAdmin login: POST /api/admin/login { "email": "${args.email}", "password": "<what you passed>" }`);
+  process.exit(0);
 }
 
-main();
+main().catch(err => {
+  console.error(err);
+  process.exit(1);
+});
