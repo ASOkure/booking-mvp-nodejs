@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const Stripe = require('stripe');
 require('dotenv').config();
+console.log('Stripe key loaded:', process.env.STRIPE_SECRET_KEY ? 'YES (' + process.env.STRIPE_SECRET_KEY.slice(0, 12) + '...)' : 'NO');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,7 @@ const BUSINESS = {
   workingHours: { start: '08:00', end: '17:00' },
   slotMinutes: 60,
   closedDays: [0], // 0 = Sunday
+  cancellationFeeGBP: Number(process.env.CANCELLATION_FEE_GBP || 0),
   services: [
     { id: 'standard-clean', name: 'Standard Clean', durationMinutes: 60, priceGBP: 35, description: 'A thorough clean of kitchen, bathroom, and living areas.' },
     { id: 'deep-clean', name: 'Deep Clean', durationMinutes: 120, priceGBP: 75, description: 'Top-to-bottom clean including skirting boards, appliances, and windowsills.' },
@@ -178,12 +180,31 @@ app.get('/api/bookings/:id', (req, res) => {
 });
 
 // Simple admin view, protected by a shared token in the query string.
-app.get('/api/admin/bookings', (req, res) => {
+function checkAdminToken(req, res) {
   if (req.query.token !== (process.env.ADMIN_TOKEN || 'changeme')) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
   }
+  return true;
+}
+
+app.get('/api/admin/bookings', (req, res) => {
+  if (!checkAdminToken(req, res)) return;
   const sorted = [...bookings].sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
   res.json(sorted);
+});
+
+app.post('/api/admin/bookings/:id/cancel', (req, res) => {
+  if (!checkAdminToken(req, res)) return;
+  const booking = bookings.find(b => b.id === Number(req.params.id));
+  if (!booking) return res.status(404).json({ error: 'Not found' });
+  if (booking.status === 'cancelled') return res.status(409).json({ error: 'Booking is already cancelled' });
+
+  booking.status = 'cancelled';
+  booking.cancellation_fee_gbp = BUSINESS.cancellationFeeGBP > 0 ? BUSINESS.cancellationFeeGBP : 0;
+  booking.cancelled_at = new Date().toISOString();
+  saveBookings(bookings);
+  res.json(booking);
 });
 
 app.listen(PORT, () => {

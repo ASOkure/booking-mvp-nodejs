@@ -69,6 +69,119 @@
   .status-pending { background: #FBF3E7; color: var(--clay-deep); }
   .status-cancelled { background: #F1E3E3; color: #A33A3A; }
   .empty-state { color: var(--slate); padding: 24px; text-align: center; }
+  .fee-note { color: var(--slate); font-size: 12px; display: block; margin-top: 2px; }
+  .btn-cancel {
+    border: 1px solid #D98A8A;
+    background: white;
+    color: #A33A3A;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-cancel:hover { background: #F1E3E3; }
+  .btn-cancel:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Calendar */
+  .calendar-card {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 28px;
+  }
+  .calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .calendar-header h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 19px;
+    margin: 0;
+  }
+  .calendar-nav { display: flex; gap: 8px; align-items: center; }
+  .calendar-nav button {
+    width: auto;
+    border: 1px solid var(--line);
+    background: white;
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .calendar-nav button:hover { border-color: var(--clay); }
+  .calendar-legend {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--slate);
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+  }
+  .calendar-dow {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--slate);
+    text-transform: uppercase;
+    padding-bottom: 4px;
+  }
+  .calendar-cell {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    cursor: pointer;
+    position: relative;
+    background: white;
+    transition: transform 0.1s ease;
+  }
+  .calendar-cell:hover { transform: scale(1.05); }
+  .calendar-cell.pad { visibility: hidden; cursor: default; }
+  .calendar-cell.selected { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .calendar-cell .dot {
+    width: 8px; height: 8px; border-radius: 50%; margin-top: 3px;
+  }
+  .cal-available { background: #E5F1EA; }
+  .cal-available .dot { background: var(--forest); }
+  .cal-full { background: #F6E1E1; }
+  .cal-full .dot { background: #A33A3A; }
+  .cal-cancelled-only { background: #ECECEC; }
+  .cal-cancelled-only .dot { background: #8A8A8A; }
+  .cal-closed { background: var(--parchment); color: var(--slate); }
+  .filter-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--parchment-deep);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    font-size: 14px;
+    margin-bottom: 14px;
+  }
+  .filter-banner button {
+    width: auto;
+    background: transparent;
+    border: none;
+    color: var(--clay-deep);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+  }
 </style>
 </head>
 <body>
@@ -83,65 +196,233 @@
     <button class="btn-primary" id="loadButton">Load bookings</button>
   </div>
 
+  <div id="calendarContainer"></div>
   <div id="results"></div>
 </div>
 
 <script>
   const tokenInput = document.getElementById('tokenInput');
   const resultsEl = document.getElementById('results');
+  const calendarContainer = document.getElementById('calendarContainer');
+
+  let allBookings = [];
+  let businessConfig = null;
+  let calendarMonth = new Date(); // month currently displayed
+  calendarMonth.setDate(1);
+  let selectedDate = null; // 'YYYY-MM-DD' or null
 
   // Remember the token locally so you don't have to retype it every visit.
   const savedToken = localStorage.getItem('adminToken');
   if (savedToken) tokenInput.value = savedToken;
 
+  async function loadConfig() {
+    if (businessConfig) return businessConfig;
+    const res = await fetch('/api/config');
+    businessConfig = await res.json();
+    return businessConfig;
+  }
+
   async function loadBookings() {
     const token = tokenInput.value.trim();
     if (!token) {
       resultsEl.innerHTML = '<p class="empty-state">Enter the admin token to view bookings.</p>';
+      calendarContainer.innerHTML = '';
       return;
     }
     localStorage.setItem('adminToken', token);
     resultsEl.innerHTML = '<p class="empty-state">Loading…</p>';
 
     try {
+      await loadConfig();
       const res = await fetch(`/api/admin/bookings?token=${encodeURIComponent(token)}`);
       if (res.status === 401) {
         resultsEl.innerHTML = '<p class="empty-state">Incorrect token.</p>';
+        calendarContainer.innerHTML = '';
         return;
       }
-      const bookings = await res.json();
-      renderTable(bookings);
+      allBookings = await res.json();
+      renderCalendar();
+      renderTable();
     } catch (err) {
       resultsEl.innerHTML = '<p class="empty-state">Could not load bookings. Is the server running?</p>';
     }
   }
 
-  function renderTable(bookings) {
-    if (!bookings.length) {
-      resultsEl.innerHTML = '<p class="empty-state">No bookings yet.</p>';
-      return;
-    }
-    const rows = bookings.map(b => `
-      <tr>
-        <td>${b.date}</td>
-        <td>${b.time}</td>
-        <td>${b.service_id}</td>
-        <td>${b.customer_name}<br><span class="muted small">${b.customer_email}</span></td>
-        <td>£${b.amount_gbp}</td>
-        <td><span class="status-pill status-${b.status}">${b.status}</span></td>
-      </tr>
-    `).join('');
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function toDateStr(d) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 
-    resultsEl.innerHTML = `
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th><th>Time</th><th>Service</th><th>Customer</th><th>Price</th><th>Status</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
+  function daySlotCount(date) {
+    if (!businessConfig) return 0;
+    if (businessConfig.closedDays.includes(date.getDay())) return 0;
+    const [startH, startM] = businessConfig.workingHours.start.split(':').map(Number);
+    const [endH, endM] = businessConfig.workingHours.end.split(':').map(Number);
+    const totalMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+    return Math.max(0, Math.floor(totalMinutes / businessConfig.slotMinutes));
+  }
+
+  function dayStatus(dateStr, date) {
+    const bookingsForDay = allBookings.filter(b => b.date === dateStr);
+    const totalSlots = daySlotCount(date);
+    if (bookingsForDay.length === 0) {
+      return totalSlots === 0 ? 'closed' : 'available';
+    }
+    const active = bookingsForDay.filter(b => b.status !== 'cancelled');
+    if (active.length === 0) return 'cancelled-only';
+    if (active.length >= totalSlots) return 'full';
+    return 'available';
+  }
+
+  function renderCalendar() {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const monthLabel = calendarMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    const firstOfMonth = new Date(year, month, 1);
+    const startPad = (firstOfMonth.getDay() + 6) % 7; // Monday-first grid
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    let cells = '';
+    for (let i = 0; i < startPad; i++) {
+      cells += '<div class="calendar-cell pad"></div>';
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      const dateStr = toDateStr(date);
+      const status = dayStatus(dateStr, date);
+      const selectedClass = dateStr === selectedDate ? ' selected' : '';
+      cells += `
+        <div class="calendar-cell cal-${status}${selectedClass}" data-date="${dateStr}" title="${status.replace('-', ' ')}">
+          <span>${day}</span>
+          ${status === 'closed' ? '' : '<span class="dot"></span>'}
+        </div>
+      `;
+    }
+
+    const dowLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<div class="calendar-dow">${d}</div>`).join('');
+
+    calendarContainer.innerHTML = `
+      <div class="calendar-card">
+        <div class="calendar-header">
+          <h2>${monthLabel}</h2>
+          <div class="calendar-nav">
+            <button id="prevMonth">&larr; Prev</button>
+            <button id="todayMonth">Today</button>
+            <button id="nextMonth">Next &rarr;</button>
+          </div>
+        </div>
+        <div class="calendar-legend">
+          <span class="legend-item"><span class="legend-dot" style="background:var(--forest)"></span> Available</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#A33A3A"></span> Fully booked</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#8A8A8A"></span> Cancelled only</span>
+          <span class="legend-item"><span class="legend-dot" style="background:var(--parchment-deep);border:1px solid var(--line)"></span> Closed</span>
+        </div>
+        <div class="calendar-grid">
+          ${dowLabels}
+          ${cells}
+        </div>
+      </div>
     `;
+
+    document.getElementById('prevMonth').addEventListener('click', () => {
+      calendarMonth.setMonth(calendarMonth.getMonth() - 1);
+      renderCalendar();
+    });
+    document.getElementById('nextMonth').addEventListener('click', () => {
+      calendarMonth.setMonth(calendarMonth.getMonth() + 1);
+      renderCalendar();
+    });
+    document.getElementById('todayMonth').addEventListener('click', () => {
+      calendarMonth = new Date();
+      calendarMonth.setDate(1);
+      renderCalendar();
+    });
+    calendarContainer.querySelectorAll('.calendar-cell[data-date]').forEach(cell => {
+      cell.addEventListener('click', () => {
+        const d = cell.getAttribute('data-date');
+        selectedDate = selectedDate === d ? null : d;
+        renderCalendar();
+        renderTable();
+      });
+    });
+  }
+
+  async function cancelBooking(id) {
+    const fee = businessConfig && businessConfig.cancellationFeeGBP > 0 ? businessConfig.cancellationFeeGBP : 0;
+    const message = fee > 0
+      ? `Cancel this booking? A cancellation fee of £${fee} will apply.`
+      : 'Cancel this booking?';
+    if (!confirm(message)) return;
+
+    const token = tokenInput.value.trim();
+    try {
+      const res = await fetch(`/api/admin/bookings/${id}/cancel?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Could not cancel booking.');
+        return;
+      }
+      const idx = allBookings.findIndex(b => b.id === id);
+      if (idx !== -1) allBookings[idx] = data;
+      renderCalendar();
+      renderTable();
+    } catch (err) {
+      alert('Could not cancel booking. Is the server running?');
+    }
+  }
+
+  function renderTable() {
+    const filtered = selectedDate ? allBookings.filter(b => b.date === selectedDate) : allBookings;
+    const sorted = [...filtered].sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
+
+    const banner = selectedDate
+      ? `<div class="filter-banner"><span>Showing bookings for <strong>${selectedDate}</strong></span><button id="clearFilter">Clear filter</button></div>`
+      : '';
+
+    if (!sorted.length) {
+      resultsEl.innerHTML = banner + '<p class="empty-state">No bookings for this view.</p>';
+    } else {
+      const rows = sorted.map(b => `
+        <tr>
+          <td>${b.date}</td>
+          <td>${b.time}</td>
+          <td>${b.service_id}</td>
+          <td>${b.customer_name}<br><span class="muted small">${b.customer_email}</span></td>
+          <td>£${b.amount_gbp}</td>
+          <td>
+            <span class="status-pill status-${b.status}">${b.status}</span>
+            ${b.status === 'cancelled' && b.cancellation_fee_gbp > 0 ? `<span class="fee-note">Fee: £${b.cancellation_fee_gbp}</span>` : ''}
+          </td>
+          <td>
+            ${b.status !== 'cancelled' ? `<button class="btn-cancel" data-id="${b.id}">Cancel</button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+
+      resultsEl.innerHTML = banner + `
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th><th>Time</th><th>Service</th><th>Customer</th><th>Price</th><th>Status</th><th></th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+
+      resultsEl.querySelectorAll('.btn-cancel').forEach(btn => {
+        btn.addEventListener('click', () => cancelBooking(Number(btn.getAttribute('data-id'))));
+      });
+    }
+
+    const clearBtn = document.getElementById('clearFilter');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        selectedDate = null;
+        renderCalendar();
+        renderTable();
+      });
+    }
   }
 
   document.getElementById('loadButton').addEventListener('click', loadBookings);
