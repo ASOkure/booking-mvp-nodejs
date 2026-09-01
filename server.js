@@ -41,6 +41,8 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
   }
   if (event.type === 'checkout.session.completed') {
     await bookings.confirmByStripeSessionId(event.data.object.id);
+  } else if (event.type === 'checkout.session.expired') {
+    await bookings.expireByStripeSessionId(event.data.object.id);
   }
   res.json({ received: true });
 });

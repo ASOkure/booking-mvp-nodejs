@@ -74,6 +74,16 @@ async function confirmByStripeSessionId(sessionId) {
   await pool.query(`UPDATE bookings SET status = 'confirmed' WHERE stripe_session_id = $1`, [sessionId]);
 }
 
+// Only touches bookings still 'pending' — an abandoned/expired checkout
+// session should never override a booking that was somehow already
+// confirmed or cancelled through another path.
+async function expireByStripeSessionId(sessionId) {
+  await pool.query(`
+    UPDATE bookings SET status = 'cancelled', cancelled_at = now()
+    WHERE stripe_session_id = $1 AND status = 'pending'
+  `, [sessionId]);
+}
+
 async function listForBusiness(businessId) {
   const { rows } = await pool.query(`
     SELECT * FROM bookings WHERE business_id = $1 ORDER BY date DESC, time DESC
@@ -105,6 +115,7 @@ module.exports = {
   setStripeSessionId,
   setStatus,
   confirmByStripeSessionId,
+  expireByStripeSessionId,
   listForBusiness,
   cancel,
 };
