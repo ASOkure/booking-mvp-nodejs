@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bookings — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .admin-wrap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+  .admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .admin-header h1 {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    margin: 0;
+  }
+  .token-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .token-row input {
+    flex: 1;
+    max-width: 280px;
+  }
+  .token-row button {
+    width: auto;
+    padding: 12px 20px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  th, td {
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  th {
+    background: var(--parchment-deep);
+    font-weight: 600;
+  }
+  tr:last-child td { border-bottom: none; }
+  .status-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .status-confirmed { background: #E5F1EA; color: var(--forest); }
+  .status-pending { background: #FBF3E7; color: var(--clay-deep); }
+  .status-cancelled { background: #F1E3E3; color: #A33A3A; }
+  .empty-state { color: var(--slate); padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="admin-wrap">
+  <div class="admin-header">
+    <h1>Bookings</h1>
+    <a href="index.html" class="muted small">Back to booking page</a>
+  </div>
+
+  <div class="token-row">
+    <input type="password" id="tokenInput" class="text-input" placeholder="Admin token" style="margin-bottom:0;">
+    <button class="btn-primary" id="loadButton">Load bookings</button>
+  </div>
+
+  <div id="results"></div>
+</div>
+
+<script>
+  const tokenInput = document.getElementById('tokenInput');
+  const resultsEl = document.getElementById('results');
+
+  // Remember the token locally so you don't have to retype it every visit.
+  const savedToken = localStorage.getItem('adminToken');
+  if (savedToken) tokenInput.value = savedToken;
+
+  async function loadBookings() {
+    const token = tokenInput.value.trim();
+    if (!token) {
+      resultsEl.innerHTML = '<p class="empty-state">Enter the admin token to view bookings.</p>';
+      return;
+    }
+    localStorage.setItem('adminToken', token);
+    resultsEl.innerHTML = '<p class="empty-state">Loading…</p>';
+
+    try {
+      const res = await fetch(`/api/admin/bookings?token=${encodeURIComponent(token)}`);
+      if (res.status === 401) {
+        resultsEl.innerHTML = '<p class="empty-state">Incorrect token.</p>';
+        return;
+      }
+      const bookings = await res.json();
+      renderTable(bookings);
+    } catch (err) {
+      resultsEl.innerHTML = '<p class="empty-state">Could not load bookings. Is the server running?</p>';
+    }
+  }
+
+  function renderTable(bookings) {
+    if (!bookings.length) {
+      resultsEl.innerHTML = '<p class="empty-state">No bookings yet.</p>';
+      return;
+    }
+    const rows = bookings.map(b => `
+      <tr>
+        <td>${b.date}</td>
+        <td>${b.time}</td>
+        <td>${b.service_id}</td>
+        <td>${b.customer_name}<br><span class="muted small">${b.customer_email}</span></td>
+        <td>£${b.amount_gbp}</td>
+        <td><span class="status-pill status-${b.status}">${b.status}</span></td>
+      </tr>
+    `).join('');
+
+    resultsEl.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th>Time</th><th>Service</th><th>Customer</th><th>Price</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  document.getElementById('loadButton').addEventListener('click', loadBookings);
+  tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadBookings(); });
+
+  if (savedToken) loadBookings();
+</script>
+</body>
+</html>
