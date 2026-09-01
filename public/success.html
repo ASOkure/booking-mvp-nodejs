@@ -6,7 +6,7 @@
 <title>Booking confirmed</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="/styles.css">
 <style>
   .confirm-wrap {
     max-width: 560px;
@@ -47,20 +47,24 @@
     <h1>You're booked in</h1>
 <p>A confirmation has been sent to your email. We look forward to seeing you.</p>
 <div id="details">Loading booking details…</div>
-<a href="index.html" class="btn-primary" style="display:inline-block;width:auto;margin-top:28px;text-decoration:none;">Book another visit</a>
+<a href="/" id="bookAnotherLink" class="btn-primary" style="display:inline-block;width:auto;margin-top:28px;text-decoration:none;">Book another visit</a>
 </div>
 
   <script>
     const params = new URLSearchParams(window.location.search);
     const bookingId = params.get('booking');
+    const businessSlug = params.get('business');
+    if (businessSlug) {
+      document.getElementById('bookAnotherLink').href = `/${businessSlug}`;
+    }
     if (bookingId) {
       fetch(`/api/bookings/${bookingId}`)
         .then(r => r.json())
         .then(b => {
           document.getElementById('details').innerHTML = `
-            <strong>${b.service_id}</strong><br>
+            <strong>${b.serviceName || 'Booking'}</strong><br>
             ${b.date} at ${b.time}<br>
-            £${b.amount_gbp} · ${b.status}
+            £${b.amountGBP} · ${b.status}
           `;
         })
         .catch(() => {

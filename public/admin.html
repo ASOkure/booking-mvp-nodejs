@@ -6,7 +6,7 @@
 <title>Bookings — Admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="/styles.css">
 <style>
   .admin-wrap {
     max-width: 960px;
@@ -188,12 +188,14 @@
 <div class="admin-wrap">
   <div class="admin-header">
     <h1>Bookings</h1>
-    <a href="index.html" class="muted small">Back to booking page</a>
+    <a href="/" class="muted small">Back to booking page</a>
   </div>
 
   <div class="token-row">
-    <input type="password" id="tokenInput" class="text-input" placeholder="Admin token" style="margin-bottom:0;">
-    <button class="btn-primary" id="loadButton">Load bookings</button>
+    <input type="email" id="emailInput" class="text-input" placeholder="Email" autocomplete="username" style="margin-bottom:0;">
+    <input type="password" id="passwordInput" class="text-input" placeholder="Password" autocomplete="current-password" style="margin-bottom:0;">
+    <button class="btn-primary" id="loadButton">Log in</button>
+    <button class="btn-ghost" id="logoutButton" style="display:none;">Log out</button>
   </div>
 
   <div id="calendarContainer"></div>
@@ -201,43 +203,98 @@
 </div>
 
 <script>
-  const tokenInput = document.getElementById('tokenInput');
+  const emailInput = document.getElementById('emailInput');
+  const passwordInput = document.getElementById('passwordInput');
+  const loadButton = document.getElementById('loadButton');
+  const logoutButton = document.getElementById('logoutButton');
   const resultsEl = document.getElementById('results');
   const calendarContainer = document.getElementById('calendarContainer');
 
   let allBookings = [];
+  let allServices = [];
   let businessConfig = null;
+  let adminToken = localStorage.getItem('adminJwt') || null;
   let calendarMonth = new Date(); // month currently displayed
   calendarMonth.setDate(1);
   let selectedDate = null; // 'YYYY-MM-DD' or null
 
-  // Remember the token locally so you don't have to retype it every visit.
-  const savedToken = localStorage.getItem('adminToken');
-  if (savedToken) tokenInput.value = savedToken;
-
-  async function loadConfig() {
-    if (businessConfig) return businessConfig;
-    const res = await fetch('/api/config');
-    businessConfig = await res.json();
-    return businessConfig;
+  function serviceName(serviceId) {
+    const s = allServices.find(s => s.id === serviceId);
+    return s ? s.name : `Service #${serviceId}`;
   }
 
-  async function loadBookings() {
-    const token = tokenInput.value.trim();
-    if (!token) {
-      resultsEl.innerHTML = '<p class="empty-state">Enter the admin token to view bookings.</p>';
-      calendarContainer.innerHTML = '';
+  function setLoggedInUI(loggedIn) {
+    emailInput.style.display = loggedIn ? 'none' : '';
+    passwordInput.style.display = loggedIn ? 'none' : '';
+    loadButton.style.display = loggedIn ? 'none' : '';
+    logoutButton.style.display = loggedIn ? '' : 'none';
+  }
+
+  async function login() {
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    if (!email || !password) {
+      resultsEl.innerHTML = '<p class="empty-state">Enter your email and password to log in.</p>';
       return;
     }
-    localStorage.setItem('adminToken', token);
     resultsEl.innerHTML = '<p class="empty-state">Loading…</p>';
 
     try {
-      await loadConfig();
-      const res = await fetch(`/api/admin/bookings?token=${encodeURIComponent(token)}`);
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        resultsEl.innerHTML = `<p class="empty-state">${data.error || 'Login failed.'}</p>`;
+        return;
+      }
+      adminToken = data.token;
+      localStorage.setItem('adminJwt', adminToken);
+      businessConfig = data.business;
+      allServices = data.services;
+      setLoggedInUI(true);
+      await loadBookings();
+    } catch (err) {
+      resultsEl.innerHTML = '<p class="empty-state">Could not log in. Is the server running?</p>';
+    }
+  }
+
+  function logout() {
+    adminToken = null;
+    localStorage.removeItem('adminJwt');
+    businessConfig = null;
+    allBookings = [];
+    allServices = [];
+    setLoggedInUI(false);
+    calendarContainer.innerHTML = '';
+    resultsEl.innerHTML = '';
+    emailInput.value = '';
+    passwordInput.value = '';
+  }
+
+  async function loadBookings() {
+    resultsEl.innerHTML = '<p class="empty-state">Loading…</p>';
+    try {
+      if (!businessConfig) {
+        const meRes = await fetch('/api/admin/me', { headers: { Authorization: `Bearer ${adminToken}` } });
+        if (meRes.status === 401) {
+          logout();
+          resultsEl.innerHTML = '<p class="empty-state">Session expired. Please log in again.</p>';
+          return;
+        }
+        const me = await meRes.json();
+        businessConfig = me.business;
+        allServices = me.services;
+      }
+
+      const res = await fetch('/api/admin/bookings', {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
       if (res.status === 401) {
-        resultsEl.innerHTML = '<p class="empty-state">Incorrect token.</p>';
-        calendarContainer.innerHTML = '';
+        logout();
+        resultsEl.innerHTML = '<p class="empty-state">Session expired. Please log in again.</p>';
         return;
       }
       allBookings = await res.json();
@@ -352,10 +409,10 @@
       : 'Cancel this booking?';
     if (!confirm(message)) return;
 
-    const token = tokenInput.value.trim();
     try {
-      const res = await fetch(`/api/admin/bookings/${id}/cancel?token=${encodeURIComponent(token)}`, {
+      const res = await fetch(`/api/admin/bookings/${id}/cancel`, {
         method: 'POST',
+        headers: { Authorization: `Bearer ${adminToken}` },
       });
       const data = await res.json();
       if (!res.ok) {
@@ -386,12 +443,12 @@
         <tr>
           <td>${b.date}</td>
           <td>${b.time}</td>
-          <td>${b.service_id}</td>
-          <td>${b.customer_name}<br><span class="muted small">${b.customer_email}</span></td>
-          <td>£${b.amount_gbp}</td>
+          <td>${serviceName(b.serviceId)}</td>
+          <td>${b.customerName}<br><span class="muted small">${b.customerEmail}</span></td>
+          <td>£${b.amountGBP}</td>
           <td>
             <span class="status-pill status-${b.status}">${b.status}</span>
-            ${b.status === 'cancelled' && b.cancellation_fee_gbp > 0 ? `<span class="fee-note">Fee: £${b.cancellation_fee_gbp}</span>` : ''}
+            ${b.status === 'cancelled' && b.cancellationFeeGBP > 0 ? `<span class="fee-note">Fee: £${b.cancellationFeeGBP}</span>` : ''}
           </td>
           <td>
             ${b.status !== 'cancelled' ? `<button class="btn-cancel" data-id="${b.id}">Cancel</button>` : ''}
@@ -425,10 +482,17 @@
     }
   }
 
-  document.getElementById('loadButton').addEventListener('click', loadBookings);
-  tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadBookings(); });
+  loadButton.addEventListener('click', login);
+  logoutButton.addEventListener('click', logout);
+  passwordInput.addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
-  if (savedToken) loadBookings();
+  // A stored JWT only proves who they were, not the business's current
+  // config, so re-fetch bookings and rely on a 401 to force re-login if
+  // the token has expired — no cached business/services to restore blind.
+  if (adminToken) {
+    setLoggedInUI(true);
+    loadBookings();
+  }
 </script>
 </body>
 </html>

@@ -4,7 +4,7 @@
     {
       "name": "booking-mvp",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["server.js"],
+      "runtimeArgs": ["--experimental-sqlite", "server.js"],
       "port": 3000,
       "autoPort": true
     }

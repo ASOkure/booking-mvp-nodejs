@@ -1,3 +1,6 @@
+const slug = window.location.pathname.split('/').filter(Boolean)[0] || '';
+const API_BASE = `/api/business/${slug}`;
+
 const state = {
   business: null,
   serviceId: null,
@@ -6,7 +9,11 @@ const state = {
 };
 
 async function loadConfig() {
-  const res = await fetch('/api/config');
+  const res = await fetch(`${API_BASE}/config`);
+  if (!res.ok) {
+    document.getElementById('page').innerHTML = '<p class="muted" style="padding:64px 24px;">This booking page could not be found.</p>';
+    return;
+  }
   state.business = await res.json();
   renderIntro();
   renderServiceOptions();
@@ -50,7 +57,7 @@ function renderServiceOptions() {
     row.addEventListener('click', () => {
       wrap.querySelectorAll('.option-row').forEach(r => r.classList.remove('selected'));
       row.classList.add('selected');
-      state.serviceId = row.dataset.id;
+      state.serviceId = Number(row.dataset.id);
       document.getElementById('toStep2').disabled = false;
     });
   });
@@ -75,7 +82,7 @@ document.getElementById('dateInput').addEventListener('change', async (e) => {
   const slotsWrap = document.getElementById('slots');
   slotsWrap.innerHTML = '<p class="muted">Loading availability…</p>';
 
-  const res = await fetch(`/api/availability?date=${state.date}`);
+  const res = await fetch(`${API_BASE}/availability?date=${state.date}`);
   const data = await res.json();
 
   if (!data.slots.length) {
@@ -126,7 +133,7 @@ document.getElementById('payButton').addEventListener('click', async () => {
   payButton.textContent = 'Redirecting to secure payment…';
 
   try {
-    const res = await fetch('/api/bookings', {
+    const res = await fetch(`${API_BASE}/bookings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -147,7 +154,7 @@ document.getElementById('payButton').addEventListener('click', async () => {
     }
 
     if (data.demoMode) {
-      window.location.href = `success.html?booking=${data.bookingId}`;
+      window.location.href = `/success.html?booking=${data.bookingId}&business=${slug}`;
     } else {
       window.location.href = data.checkoutUrl;
     }
