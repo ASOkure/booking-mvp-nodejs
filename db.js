@@ -56,12 +56,21 @@ async function initSchema() {
       stripe_session_id TEXT,
       cancellation_fee_gbp INTEGER,
       cancelled_at TIMESTAMPTZ,
+      reminder_24h_sent_at TIMESTAMPTZ,
+      reminder_1h_sent_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS ux_bookings_biz_slot
       ON bookings(business_id, date, time)
       WHERE status <> 'cancelled';
+  `);
+
+  // CREATE TABLE IF NOT EXISTS above won't add new columns to a table that
+  // already exists on a live database — these cover that migration.
+  await pool.query(`
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reminder_24h_sent_at TIMESTAMPTZ;
+    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reminder_1h_sent_at TIMESTAMPTZ;
   `);
 }
 

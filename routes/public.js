@@ -67,7 +67,7 @@ router.post('/bookings', async (req, res) => {
   const { serviceId, date, time, name, email, phone, notes } = req.body;
   const service = await services.getByIdForBusiness(Number(serviceId), business.id);
   if (!service) return res.status(400).json({ error: 'Unknown service' });
-  if (!date || !time || !name || !email) return res.status(400).json({ error: 'Missing required fields' });
+  if (!date || !time || !name || !email || !phone) return res.status(400).json({ error: 'Missing required fields' });
 
   let booking;
   try {

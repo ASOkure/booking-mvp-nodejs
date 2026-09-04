@@ -20,6 +20,8 @@ function rowToBooking(row) {
     stripeSessionId: row.stripe_session_id,
     cancellationFeeGBP: row.cancellation_fee_gbp,
     cancelledAt: row.cancelled_at,
+    reminder24hSentAt: row.reminder_24h_sent_at,
+    reminder1hSentAt: row.reminder_1h_sent_at,
     createdAt: row.created_at,
   };
 }
@@ -91,6 +93,37 @@ async function listForBusiness(businessId) {
   return rows.map(rowToBooking);
 }
 
+// Bounded candidate set for the reminder job: confirmed bookings in roughly
+// the next couple of days that are still missing at least one reminder.
+// Precise timing (accounting for the business's timezone) is computed in
+// application code — date/time are plain strings here, not real timestamps,
+// so timezone-aware filtering isn't practical to do in SQL directly.
+async function findConfirmedUpcomingForReminders() {
+  const { rows } = await pool.query(`
+    SELECT b.*, biz.timezone AS business_timezone, biz.name AS business_name, s.name AS service_name
+    FROM bookings b
+    JOIN businesses biz ON biz.id = b.business_id
+    JOIN services s ON s.id = b.service_id
+    WHERE b.status = 'confirmed'
+      AND (b.reminder_24h_sent_at IS NULL OR b.reminder_1h_sent_at IS NULL)
+      AND b.date BETWEEN to_char(now() - interval '1 day', 'YYYY-MM-DD') AND to_char(now() + interval '2 days', 'YYYY-MM-DD')
+  `);
+  return rows.map(row => ({
+    ...rowToBooking(row),
+    businessTimezone: row.business_timezone,
+    businessName: row.business_name,
+    serviceName: row.service_name,
+  }));
+}
+
+async function markReminder24hSent(id) {
+  await pool.query('UPDATE bookings SET reminder_24h_sent_at = now() WHERE id = $1', [id]);
+}
+
+async function markReminder1hSent(id) {
+  await pool.query('UPDATE bookings SET reminder_1h_sent_at = now() WHERE id = $1', [id]);
+}
+
 async function cancel(id, businessId, cancellationFeeGBP) {
   const existing = await findByIdForBusiness(id, businessId);
   if (!existing) return null;
@@ -118,4 +151,7 @@ module.exports = {
   expireByStripeSessionId,
   listForBusiness,
   cancel,
+  findConfirmedUpcomingForReminders,
+  markReminder24hSent,
+  markReminder1hSent,
 };

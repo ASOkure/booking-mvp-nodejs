@@ -93,7 +93,20 @@ either yet; re-run the form/endpoint or edit the database directly.
 4. Build command: `npm install`  ·  Start command: `npm start`
 5. Env vars: `DATABASE_URL` (from step 2), `JWT_SECRET`, `PLATFORM_ADMIN_KEY`,
    `PUBLIC_URL` (the `https://your-app.onrender.com` URL Render gives you),
-   `DEFAULT_BUSINESS_SLUG` (set after creating your first business)
+   `DEFAULT_BUSINESS_SLUG` (set after creating your first business), and
+   optionally `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_PHONE_NUMBER`
+   for SMS reminders
+
+## SMS booking reminders
+
+Confirmed bookings automatically get an SMS reminder ~24h and ~1h before the
+appointment (via Twilio), cutting no-shows. Requires `TWILIO_ACCOUNT_SID`,
+`TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` — get these by creating a free
+Twilio account at https://www.twilio.com/try-twilio. Without them set,
+reminders are just logged to the console instead of sent, so everything else
+still works. Phone number is a required field on the booking form for this
+reason. Runs as an in-process check every 15 minutes — no separate worker or
+cron job needed.
 
 ## Viewing bookings
 

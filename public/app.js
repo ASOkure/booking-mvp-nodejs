@@ -121,9 +121,9 @@ document.getElementById('payButton').addEventListener('click', async () => {
   const notes = document.getElementById('notesInput').value.trim();
   const errorEl = document.getElementById('formError');
 
-  if (!name || !email) {
+  if (!name || !email || !phone) {
     errorEl.hidden = false;
-    errorEl.textContent = 'Please add your name and email to continue.';
+    errorEl.textContent = 'Please add your name, email, and phone number to continue.';
     return;
   }
   errorEl.hidden = true;

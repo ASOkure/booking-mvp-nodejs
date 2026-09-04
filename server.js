@@ -7,6 +7,7 @@ require('dotenv').config({ quiet: true });
 const { initSchema } = require('./db');
 const bookings = require('./repositories/bookings');
 const services = require('./repositories/services');
+const { startReminderScheduler } = require('./reminders');
 const publicRouter = require('./routes/public');
 const adminRouter = require('./routes/admin');
 const platformRouter = require('./routes/platform');
@@ -71,6 +72,7 @@ initSchema()
     app.listen(PORT, () => {
       console.log(`Booking MVP running at http://localhost:${PORT}`);
     });
+    startReminderScheduler();
   })
   .catch(err => {
     console.error('Failed to initialize database schema:', err);
