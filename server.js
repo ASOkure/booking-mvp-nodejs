@@ -7,6 +7,8 @@ require('dotenv').config({ quiet: true });
 const { initSchema } = require('./db');
 const bookings = require('./repositories/bookings');
 const services = require('./repositories/services');
+const businesses = require('./repositories/businesses');
+const { buildBookingIcs } = require('./ics');
 const { startReminderScheduler } = require('./reminders');
 const publicRouter = require('./routes/public');
 const adminRouter = require('./routes/admin');
@@ -59,6 +61,21 @@ app.get('/api/bookings/:id', async (req, res) => {
   if (!booking) return res.status(404).json({ error: 'Not found' });
   const service = await services.getById(booking.serviceId);
   res.json({ ...booking, serviceName: service ? service.name : null });
+});
+
+app.get('/api/bookings/:id/ics', async (req, res) => {
+  const booking = await bookings.findById(Number(req.params.id));
+  if (!booking) return res.status(404).json({ error: 'Not found' });
+  const [service, business] = await Promise.all([
+    services.getById(booking.serviceId),
+    businesses.getById(booking.businessId),
+  ]);
+  if (!service || !business) return res.status(404).json({ error: 'Not found' });
+
+  const ics = buildBookingIcs({ booking, service, business });
+  res.set('Content-Type', 'text/calendar; charset=utf-8');
+  res.set('Content-Disposition', `attachment; filename="booking-${booking.id}.ics"`);
+  res.send(ics);
 });
 
 // Any other single-segment path is treated as a business slug and served

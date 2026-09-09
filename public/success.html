@@ -47,7 +47,10 @@
     <h1>You're booked in</h1>
 <p>A confirmation has been sent to your email. We look forward to seeing you.</p>
 <div id="details">Loading booking details…</div>
-<a href="/" id="bookAnotherLink" class="btn-primary" style="display:inline-block;width:auto;margin-top:28px;text-decoration:none;">Book another visit</a>
+<div style="display:flex;gap:12px;justify-content:center;margin-top:28px;flex-wrap:wrap;">
+  <a href="#" id="addToCalendarLink" class="btn-ghost" style="display:none;width:auto;text-decoration:none;">Add to calendar</a>
+  <a href="/" id="bookAnotherLink" class="btn-primary" style="display:inline-block;width:auto;text-decoration:none;">Book another visit</a>
+</div>
 </div>
 
   <script>
@@ -66,6 +69,9 @@
             ${b.date} at ${b.time}<br>
             £${b.amountGBP} · ${b.status}
           `;
+          const calendarLink = document.getElementById('addToCalendarLink');
+          calendarLink.href = `/api/bookings/${bookingId}/ics`;
+          calendarLink.style.display = 'inline-block';
         })
         .catch(() => {
           document.getElementById('details').textContent = 'Could not load booking details.';
