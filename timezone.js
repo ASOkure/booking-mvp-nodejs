@@ -34,4 +34,10 @@ function zonedTimeToUtc(dateStr, timeStr, timeZone) {
   return new Date(guess.getTime() + diff);
 }
 
-module.exports = { zonedTimeToUtc };
+// Whether a "wall clock" date+time in the given timezone has already
+// passed, relative to now.
+function isPast(dateStr, timeStr, timeZone) {
+  return zonedTimeToUtc(dateStr, timeStr, timeZone).getTime() < Date.now();
+}
+
+module.exports = { zonedTimeToUtc, isPast };

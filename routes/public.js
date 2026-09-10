@@ -3,6 +3,7 @@ const Stripe = require('stripe');
 const businesses = require('../repositories/businesses');
 const services = require('../repositories/services');
 const bookings = require('../repositories/bookings');
+const { isPast } = require('../timezone');
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:3000';
@@ -59,7 +60,8 @@ router.get('/availability', async (req, res) => {
 
   const allSlots = generateDaySlots(business);
   const taken = await bookings.takenTimesForDate(business.id, date);
-  res.json({ date, slots: allSlots.filter(s => !taken.includes(s)) });
+  const slots = allSlots.filter(s => !taken.includes(s) && !isPast(date, s, business.timezone));
+  res.json({ date, slots });
 });
 
 router.post('/bookings', async (req, res) => {
@@ -68,6 +70,7 @@ router.post('/bookings', async (req, res) => {
   const service = await services.getByIdForBusiness(Number(serviceId), business.id);
   if (!service) return res.status(400).json({ error: 'Unknown service' });
   if (!date || !time || !name || !email || !phone) return res.status(400).json({ error: 'Missing required fields' });
+  if (isPast(date, time, business.timezone)) return res.status(400).json({ error: 'That time has already passed. Please pick another.' });
 
   let booking;
   try {
